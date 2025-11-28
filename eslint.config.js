@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload } from 'lucide-react';
+import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload, Aperture } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, serverTimestamp, doc, setDoc, getDoc, updateDoc, where, getDocs, increment } from 'firebase/firestore';
@@ -8,7 +8,6 @@ import { getStorage } from 'firebase/storage';
 // ==================================================================================
 // ⚠️  AREA DI CONFIGURAZIONE  ⚠️
 // Incolla qui sotto il blocco 'const firebaseConfig' copiato da Firebase.
-// Assicurati di copiare TUTTO, comprese le parentesi graffe { e }.
 // ==================================================================================
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -28,7 +27,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app); 
-const appId = 'palmostreet-v5-final';
+const appId = 'palmostreet-v7-fixed';
 
 // --- UTILS & CONSTANTS ---
 const API_KEY_STORAGE_KEY = 'palmostreet_gemini_key';
@@ -42,6 +41,28 @@ const RARITY_CONFIG: any = {
   Common: { color: "text-white", border: "border-slate-500", bg: "bg-slate-900/80", shadow: "shadow-slate-500/20", gradient: "from-slate-800 via-black to-black" },
 };
 
+// --- IMAGE COMPRESSION UTILITY (FIX PER BUG CARICAMENTO INFINITO) ---
+const resizeImage = (file: File, maxWidth: number = 800): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const scaleFactor = maxWidth / img.width;
+        canvas.width = maxWidth;
+        canvas.height = img.height * scaleFactor;
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Compressione JPEG al 70% per ridurre drasticamente la dimensione
+        resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 // --- COMPONENTS ---
 
 const LoadingScanner = () => (
@@ -52,7 +73,9 @@ const LoadingScanner = () => (
     <div className="absolute">
         <Car className="w-24 h-24 text-red-600 animate-pulse" />
     </div>
-    <div className="mt-8 font-orbitron text-red-500 text-xl animate-pulse tracking-widest">ANALYZING SPECS...</div>
+    <div className="mt-8 font-orbitron text-red-500 text-xl animate-pulse tracking-widest text-center px-4">
+      ANALISI AI & COMPRESSIONE DATI...
+    </div>
   </div>
 );
 
@@ -78,18 +101,15 @@ const AuthScreen = () => {
       console.error(err);
       if (err.code === 'auth/invalid-credential') setError("Email o password errati.");
       else if (err.code === 'auth/email-already-in-use') setError("Email già registrata.");
-      else if (err.code === 'auth/weak-password') setError("Password troppo debole (min 6 caratteri).");
-      else if (err.code === 'auth/api-key-not-valid') setError("ERRORE CONFIG: Chiave Firebase non valida.");
+      else if (err.code === 'auth/weak-password') setError("Password troppo debole.");
       else setError(err.message);
       setLoading(false);
     }
   };
 
   return (
-    // FIX SFONDO: w-screen h-screen fixed inset-0 garantisce copertura totale
     <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-hidden">
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 w-full h-full pointer-events-none"></div>
-      
       <div className="w-full max-w-md space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
         <div className="text-center space-y-2">
             <h1 className="text-5xl font-orbitron font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]">
@@ -136,13 +156,7 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
       if (!user) throw new Error("No user found");
 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid), {
-        email: user.email,
-        nickname: nickname,
-        avatar: avatar,
-        xp: 0,
-        level: 1,
-        joinedAt: serverTimestamp(),
-        friends: []
+        email: user.email, nickname: nickname, avatar: avatar, xp: 0, level: 1, joinedAt: serverTimestamp(), friends: []
       });
 
       await updateProfile(user, { displayName: nickname, photoURL: avatar });
@@ -152,23 +166,19 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
     }
   };
 
-  const handleAvatarUpload = (e: any) => {
+  const handleAvatarUpload = async (e: any) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setAvatar(reader.result as string);
-      reader.readAsDataURL(file);
+      const resized = await resizeImage(file, 300); // Resize avatar to small
+      setAvatar(resized);
     }
   };
 
   return (
-    // FIX SFONDO
     <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-hidden">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 w-full h-full pointer-events-none"></div>
         <div className="w-full max-w-sm bg-slate-900/80 backdrop-blur p-6 rounded-2xl border border-white/10 z-10 shadow-2xl animate-in fade-in zoom-in duration-500">
             <h2 className="text-3xl font-orbitron font-bold mb-2 text-center text-white italic">IDENTITÀ PILOTA</h2>
-            <p className="text-center text-zinc-500 text-xs mb-8">Configura il tuo passaporto Palmostreet</p>
-
             <div className="flex justify-center mb-8 relative">
                 <div 
                   className={`w-32 h-32 rounded-full overflow-hidden border-4 ${avatar ? 'border-red-600' : 'border-zinc-700 border-dashed'} bg-black cursor-pointer group shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center justify-center transition-all hover:scale-105`} 
@@ -221,125 +231,88 @@ export default function PalmostreetApp() {
   const [apiKey, setApiKey] = useState('');
   const [friends, setFriends] = useState<any[]>([]); 
   const [objectives, setObjectives] = useState<any[]>([]); 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Due riferimenti separati per i due input
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  // --- FULLSCREEN AUTO-TRIGGER & API KEY LOAD ---
   useEffect(() => {
-    // Carica la API Key salvata
     const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
     if (storedKey) setApiKey(storedKey);
-
-    // Tenta fullscreen automatico
-    const enterFullScreen = () => {
-        if (!document.fullscreenElement && containerRef.current) {
-            containerRef.current.requestFullscreen().catch(() => {});
-        }
-    };
-    // Proviamo all'avvio e al primo tocco
+    const enterFullScreen = () => { if (!document.fullscreenElement && containerRef.current) { containerRef.current.requestFullscreen().catch(() => {}); } };
     document.addEventListener('click', enterFullScreen, { once: true });
-    
     return () => document.removeEventListener('click', enterFullScreen);
   }, []);
 
-  // --- AUTH LISTENER ---
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => {
-            if (doc.exists()) {
-                setUserData(doc.data());
-                setFriends(doc.data().friends || []);
-            } else {
-                setUserData(null);
-            }
-        });
+        const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => { if (doc.exists()) { setUserData(doc.data()); setFriends(doc.data().friends || []); } else { setUserData(null); } });
         const qCars = query(collection(db, 'artifacts', appId, 'users', u.uid, 'garage'), orderBy('timestamp', 'desc'));
-        const unsubCars = onSnapshot(qCars, (snap) => {
-            setCars(snap.docs.map(d => ({id: d.id, ...d.data()})));
-        });
-        setObjectives([
-            { id: 1, text: "Trova una Leggendaria", xp: 500, done: false, rarity: "Legendary" },
-            { id: 2, text: "Colleziona 3 auto oggi", xp: 100, done: false, rarity: "Common" },
-            { id: 3, text: "Trova una Vintage", xp: 250, done: false, rarity: "Vintage" },
-        ]);
+        const unsubCars = onSnapshot(qCars, (snap) => { setCars(snap.docs.map(d => ({id: d.id, ...d.data()}))); });
+        setObjectives([{ id: 1, text: "Trova una Leggendaria", xp: 500, done: false, rarity: "Legendary" }, { id: 2, text: "Colleziona 3 auto oggi", xp: 100, done: false, rarity: "Common" }, { id: 3, text: "Trova una Vintage", xp: 250, done: false, rarity: "Vintage" }]);
         return () => { unsubUser(); unsubCars(); };
-      } else {
-        setUserData(null);
-        setCars([]);
-      }
+      } else { setUserData(null); setCars([]); }
     });
     return () => unsubAuth();
   }, []);
 
-  const saveApiKey = (key: string) => {
-    setApiKey(key);
-    localStorage.setItem(API_KEY_STORAGE_KEY, key);
-  };
-
-  const determineRarity = (year: number, value: number, hp: number) => {
-    if (year < 1990) return "Vintage";
-    if (value > 200000 || hp > 600) return "Legendary";
-    if (value > 80000 || hp > 400) return "Epic";
-    if (value > 40000 || hp > 300) return "SuperRare";
-    if (value > 20000 || hp > 180) return "Rare";
-    return "Common";
-  };
+  const saveApiKey = (key: string) => { setApiKey(key); localStorage.setItem(API_KEY_STORAGE_KEY, key); };
+  const determineRarity = (year: number, value: number, hp: number) => { if (year < 1990) return "Vintage"; if (value > 200000 || hp > 600) return "Legendary"; if (value > 80000 || hp > 400) return "Epic"; if (value > 40000 || hp > 300) return "SuperRare"; if (value > 20000 || hp > 180) return "Rare"; return "Common"; };
 
   const handleScan = async (e: any) => {
     const file = e.target.files[0];
     if (!file) return;
     setLoading(true);
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64Data = (reader.result as string).split(',')[1];
-      const imageUrl = reader.result as string;
-      try {
+    
+    try {
+        // 1. RIDIMENSIONA IMMAGINE PRIMA DELL'INVIO (FIX BUG INFINITO)
+        const compressedBase64 = await resizeImage(file, 800);
+        // Rimuovi il prefisso data:image/jpeg;base64, per mandarlo all'AI
+        const base64Data = compressedBase64.split(',')[1];
+        
         let aiResult;
         if (apiKey) {
            try {
-             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Analyze this car. Return strictly JSON with: brand, model, year (number), hp (number), value_eur (number), list_value (number), description (italian), scores: { speed (1-5), versatility (1-5), quality_price (1-5), durability (1-5) }" },
-                            { inlineData: { mimeType: file.type, data: base64Data } }
-                        ]
-                    }]
-                })
-             });
+             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: "Analyze this car. Return strictly JSON with: brand, model, year (number), hp (number), value_eur (number), list_value (number), description (italian), scores: { speed (1-5), versatility (1-5), quality_price (1-5), durability (1-5) }" }, { inlineData: { mimeType: 'image/jpeg', data: base64Data } }] }] }) });
              const data = await response.json();
              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-             if(text) {
-                 const jsonMatch = text.match(/\{[\s\S]*\}/);
-                 aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-             }
-           } catch (err) {
-             console.error("API Error", err);
-           }
+             if(text) { const jsonMatch = text.match(/\{[\s\S]*\}/); aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null; }
+           } catch (err) { console.error("API Error", err); }
         }
-        if (!aiResult) {
-            await new Promise(r => setTimeout(r, 2000));
-            aiResult = {
-                brand: "Simulazione", model: "Auto Demo", year: 2024, hp: 200, value_eur: 30000, description: "Modalità simulazione attiva. Configura la API Key nelle Impostazioni per l'AI reale.", scores: { speed: 3, versatility: 4, quality_price: 5, durability: 4 }, isSimulation: true
-            };
+        
+        if (!aiResult) { 
+            await new Promise(r => setTimeout(r, 2000)); 
+            aiResult = { brand: "Simulazione", model: "Auto Demo", year: 2024, hp: 200, value_eur: 30000, description: "Modalità simulazione attiva. Configura la API Key nelle Impostazioni per l'AI reale.", scores: { speed: 3, versatility: 4, quality_price: 5, durability: 4 }, isSimulation: true }; 
         }
+        
         const rarity = determineRarity(aiResult.year, aiResult.value_eur, aiResult.hp);
-        const newCar = { ...aiResult, value: aiResult.value_eur, rarity: rarity, imageUrl: imageUrl, timestamp: serverTimestamp(), method: 'AI_VISION' };
+        
+        // Salviamo l'immagine compressa, non l'originale gigante!
+        const newCar = { ...aiResult, value: aiResult.value_eur, rarity: rarity, imageUrl: compressedBase64, timestamp: serverTimestamp(), method: 'AI_VISION' };
         setSelectedCar({ ...newCar, isPreview: true });
-      } catch (error) { console.error("Error:", error); } finally { setLoading(false); }
-    };
-    reader.readAsDataURL(file);
+        
+    } catch (error) { 
+        console.error("Error:", error); 
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const saveCarToGarage = async () => {
     if (!selectedCar || !user) return;
     setLoading(true);
-    try { const { isPreview, ...carData } = selectedCar; await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'garage'), carData); await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { xp: increment(100) }); setSelectedCar(null); setView('garage'); } catch (e) { console.error(e); } finally { setLoading(false); }
+    try { 
+        const { isPreview, ...carData } = selectedCar; 
+        await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'garage'), carData); 
+        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { xp: increment(100) }); 
+        setSelectedCar(null); 
+        setView('garage'); 
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const addFriend = async (friendId: string) => { if (!friendId) return; const newFriend = { id: friendId, addedAt: new Date().toISOString() }; const updatedFriends = [...friends, newFriend]; await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { friends: updatedFriends }); };
@@ -348,7 +321,6 @@ export default function PalmostreetApp() {
   if (userData === null) return <ProfileWizard onComplete={() => {}} />;
 
   return (
-    // FIX SFONDO COMPLETO
     <div ref={containerRef} className="fixed inset-0 w-screen h-screen bg-slate-950 text-slate-200 font-exo selection:bg-red-500/30 overflow-hidden">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,700;0,900;1,400&family=Orbitron:wght@400;700;900&display=swap');
@@ -414,13 +386,34 @@ export default function PalmostreetApp() {
         )}
 
         {view === 'scan' && (
-            <div className="h-full flex flex-col items-center justify-center animate-in zoom-in-95 w-full">
-                <div onClick={() => fileInputRef.current?.click()} className="w-64 h-64 border-2 border-dashed border-red-500/50 rounded-full flex flex-col items-center justify-center bg-red-900/10 cursor-pointer hover:bg-red-900/20 hover:scale-105 transition-all relative overflow-hidden group shadow-[0_0_30px_rgba(220,38,38,0.2)]">
-                    <div className="absolute inset-0 bg-[conic-gradient(from_0deg,transparent_0_340deg,rgba(220,38,38,0.5)_360deg)] animate-[spin_4s_linear_infinite] opacity-50"></div>
-                    <div className="absolute inset-1 bg-slate-950 rounded-full z-10 flex flex-col items-center justify-center"><Camera size={48} className="text-white mb-2 group-hover:text-red-500 transition-colors" /><span className="font-orbitron font-bold text-white tracking-widest">SCANNER</span><span className="text-[10px] text-zinc-500 mt-1 uppercase">Solo AI Vision</span></div>
+            <div className="h-full flex flex-col items-center justify-center animate-in zoom-in-95 w-full space-y-6">
+                
+                {/* BUTTON 1: CAMERA */}
+                <div onClick={() => cameraInputRef.current?.click()} className="w-full max-w-sm bg-red-600/10 border-2 border-red-600 rounded-2xl p-6 flex items-center space-x-4 cursor-pointer active:scale-95 transition-transform hover:bg-red-600/20">
+                    <div className="bg-red-600 p-3 rounded-full text-white"><Camera size={24} /></div>
+                    <div className="text-left">
+                        <h3 className="font-orbitron font-bold text-white text-lg">SCATTA FOTO</h3>
+                        <p className="text-xs text-zinc-400">Usa la fotocamera per analizzare</p>
+                    </div>
                 </div>
-                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleScan} />
-                <p className="text-xs text-zinc-500 mt-8 text-center max-w-xs px-4">Scatta una foto a un'auto reale. L'AI ne determinerà modello, valore e rarità. Se non hai l'API Key (impostazioni), verrà usata la simulazione.</p>
+
+                {/* BUTTON 2: GALLERY */}
+                <div onClick={() => galleryInputRef.current?.click()} className="w-full max-w-sm bg-slate-800/50 border-2 border-slate-700 rounded-2xl p-6 flex items-center space-x-4 cursor-pointer active:scale-95 transition-transform hover:bg-slate-700/50">
+                    <div className="bg-slate-700 p-3 rounded-full text-white"><ImageIcon size={24} /></div>
+                    <div className="text-left">
+                        <h3 className="font-orbitron font-bold text-white text-lg">GALLERIA</h3>
+                        <p className="text-xs text-zinc-400">Carica una foto salvata</p>
+                    </div>
+                </div>
+
+                {/* HIDDEN INPUTS */}
+                {/* capture="environment" force the rear camera on mobile */}
+                <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleScan} />
+                <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={handleScan} />
+
+                <p className="text-xs text-zinc-500 mt-4 text-center max-w-xs px-4">
+                    L'AI analizzerà la foto per determinare modello, valore e rarità del veicolo.
+                </p>
             </div>
         )}
 

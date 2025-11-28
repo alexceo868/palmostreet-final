@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload, Aperture, AlertTriangle, Save, Edit2 } from 'lucide-react';
+import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload, Aperture, AlertTriangle, Save, Edit2, Trophy, BarChart3, Crown, Hexagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, serverTimestamp, doc, setDoc, getDoc, updateDoc, where, getDocs, increment } from 'firebase/firestore';
@@ -9,9 +9,8 @@ import { getStorage } from 'firebase/storage';
 // CONFIGURAZIONE FIREBASE
 // ==================================================================================
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAkndIXZMQ",
+  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAKndIXZMQ", 
   authDomain: "palmostreet.firebaseapp.com",
   projectId: "palmostreet",
   storageBucket: "palmostreet.firebasestorage.app",
@@ -24,7 +23,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app); 
-const appId = 'palmostreet-v9-fixes';
+const appId = 'palmostreet-v10-season1';
 
 // --- UTILS & CONSTANTS ---
 const API_KEY_STORAGE_KEY = 'palmostreet_gemini_key';
@@ -155,7 +154,8 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
       if (!user) throw new Error("No user found");
 
       await setDoc(doc(db, 'artifacts', appId, 'users', user.uid), {
-        email: user.email, nickname: nickname, avatar: avatar, xp: 0, level: 1, joinedAt: serverTimestamp(), friends: []
+        email: user.email, nickname: nickname, avatar: avatar, xp: 0, level: 1, joinedAt: serverTimestamp(), friends: [],
+        objectives: {} // Init objectives state
       });
 
       await updateProfile(user, { displayName: nickname, photoURL: avatar });
@@ -274,6 +274,47 @@ const SettingsModal = ({ onClose, currentKey, onSaveKey, userProfile }: any) => 
   );
 };
 
+// --- OBJECTIVES LOGIC ---
+const OBJECTIVES_LIST = [
+    { id: 'first_scan', text: "Scansiona la tua prima auto", xp: 100, rarity: "Common" },
+    { id: 'find_legendary', text: "Trova una Leggendaria", xp: 1000, rarity: "Legendary" },
+    { id: 'find_vintage', text: "Trova una Vintage", xp: 500, rarity: "Vintage" },
+    { id: 'garage_value_100k', text: "Valore Garage > 100k", xp: 500, rarity: "Epic" },
+];
+
+const checkObjectives = async (cars: any[], userObjectives: any, userId: string) => {
+    const updates: any = {};
+    let xpGained = 0;
+
+    // Helper to complete objective
+    const complete = (id: string, xp: number) => {
+        if (!userObjectives?.[id]) {
+            updates[`objectives.${id}`] = true;
+            xpGained += xp;
+        }
+    };
+
+    // 1. First Scan
+    if (cars.length > 0) complete('first_scan', 100);
+
+    // 2. Find Legendary
+    if (cars.some(c => c.rarity === 'Legendary')) complete('find_legendary', 1000);
+
+    // 3. Find Vintage
+    if (cars.some(c => c.rarity === 'Vintage')) complete('find_vintage', 500);
+
+    // 4. Garage Value
+    const totalValue = cars.reduce((acc, c) => acc + (c.value || 0), 0);
+    if (totalValue > 100000) complete('garage_value_100k', 500);
+
+    if (xpGained > 0) {
+        updates['xp'] = increment(xpGained);
+        await updateDoc(doc(db, 'artifacts', appId, 'users', userId), updates);
+        return true; // Objectives updated
+    }
+    return false;
+};
+
 // --- MAIN APP ---
 export default function PalmostreetApp() {
   const [user, setUser] = useState<any>(null);
@@ -284,7 +325,6 @@ export default function PalmostreetApp() {
   const [selectedCar, setSelectedCar] = useState<any>(null);
   const [apiKey, setApiKey] = useState('');
   const [friends, setFriends] = useState<any[]>([]); 
-  const [objectives, setObjectives] = useState<any[]>([]); 
   
   // REF PER I PULSANTI SEPARATI
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -305,15 +345,36 @@ export default function PalmostreetApp() {
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => { if (doc.exists()) { setUserData(doc.data()); setFriends(doc.data().friends || []); } else { setUserData(null); } });
+        const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => { 
+            if (doc.exists()) { 
+                setUserData(doc.data()); 
+                setFriends(doc.data().friends || []); 
+            } else { 
+                setUserData(null); 
+            } 
+        });
+        
         const qCars = query(collection(db, 'artifacts', appId, 'users', u.uid, 'garage'), orderBy('timestamp', 'desc'));
-        const unsubCars = onSnapshot(qCars, (snap) => { setCars(snap.docs.map(d => ({id: d.id, ...d.data()}))); });
-        setObjectives([{ id: 1, text: "Trova una Leggendaria", xp: 500, done: false, rarity: "Legendary" }, { id: 2, text: "Colleziona 3 auto oggi", xp: 100, done: false, rarity: "Common" }, { id: 3, text: "Trova una Vintage", xp: 250, done: false, rarity: "Vintage" }]);
+        const unsubCars = onSnapshot(qCars, (snap) => { 
+            const loadedCars = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            setCars(loadedCars);
+            // Check objectives whenever cars change
+            checkObjectives(loadedCars, userData?.objectives, u.uid);
+        });
+        
         return () => { unsubUser(); unsubCars(); };
       } else { setUserData(null); setCars([]); }
     });
     return () => unsubAuth();
-  }, []);
+  }, []); // Note: userData in dependency for checkObjectives creates loop, handled inside snapshot logic roughly but better separate effect. 
+  // For simplicity here we rely on the snapshot firing.
+
+  // Extra effect to check objectives when userData is loaded first time or cars update
+  useEffect(() => {
+      if (user && userData && cars.length > 0) {
+          checkObjectives(cars, userData.objectives, user.uid);
+      }
+  }, [cars.length]); // Check when car count changes
 
   const saveApiKey = (key: string) => { setApiKey(key); localStorage.setItem(API_KEY_STORAGE_KEY, key); };
   const determineRarity = (year: number, value: number, hp: number) => { if (year < 1990) return "Vintage"; if (value > 200000 || hp > 600) return "Legendary"; if (value > 80000 || hp > 400) return "Epic"; if (value > 40000 || hp > 300) return "SuperRare"; if (value > 20000 || hp > 180) return "Rare"; return "Common"; };
@@ -324,7 +385,6 @@ export default function PalmostreetApp() {
     setLoading(true);
     
     try {
-        // COMPRESSIONE IMMAGINE (FIX SALVATAGGIO)
         const compressedBase64 = await resizeImage(file, 600);
         const base64Data = compressedBase64.split(',')[1];
         
@@ -345,7 +405,6 @@ export default function PalmostreetApp() {
         
         const rarity = determineRarity(aiResult.year, aiResult.value_eur, aiResult.hp);
         
-        // Salviamo l'immagine compressa per non bloccare Firebase
         const newCar = { ...aiResult, value: aiResult.value_eur, rarity: rarity, imageUrl: compressedBase64, timestamp: serverTimestamp(), method: 'AI_VISION' };
         setSelectedCar({ ...newCar, isPreview: true });
         
@@ -368,10 +427,9 @@ export default function PalmostreetApp() {
         await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'garage'), carData); 
         await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { xp: increment(100) }); 
         
-        // FIX: CHIUDE MODALE E PORTA AL GARAGE
         setSelectedCar(null); 
         setView('garage'); 
-        // Feedback visuale opzionale, ma il cambio vista è immediato
+        alert("Auto aggiunta al garage!");
     } catch (e: any) { 
         console.error(e); 
         alert("Errore salvataggio garage: " + e.message);
@@ -381,6 +439,10 @@ export default function PalmostreetApp() {
   };
 
   const addFriend = async (friendId: string) => { if (!friendId) return; const newFriend = { id: friendId, addedAt: new Date().toISOString() }; const updatedFriends = [...friends, newFriend]; await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { friends: updatedFriends }); };
+
+  // --- STATS CALCULATIONS ---
+  const calculateGarageValue = () => cars.reduce((acc, car) => acc + (car.value || 0), 0);
+  const countRarity = (rarity: string) => cars.filter(c => c.rarity === rarity).length;
 
   if (!user) return <AuthScreen />;
   if (userData === null) return <ProfileWizard onComplete={() => {}} />;
@@ -431,11 +493,11 @@ export default function PalmostreetApp() {
 
       {/* HEADER */}
       <header className="fixed top-0 left-0 w-full bg-gradient-to-b from-slate-950 to-transparent p-4 z-30 pointer-events-none flex justify-between items-start">
-        <div className="pointer-events-auto flex items-center space-x-3">
+        <div className="pointer-events-auto flex items-center space-x-3 cursor-pointer" onClick={() => setView('profile')}>
             <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-red-500 bg-black"><img src={userData?.avatar} alt="Profile" className="w-full h-full object-cover" /></div>
             <div>
                 <div className="text-xs font-bold text-white uppercase">{userData?.nickname}</div>
-                <div className="text-[10px] text-zinc-500 font-mono flex items-center space-x-1"><span>LVL {userData?.level || 1}</span><span>•</span><span onClick={() => {navigator.clipboard.writeText(user.uid); alert("ID Copiato!")}} className="cursor-pointer hover:text-white flex items-center">ID: {user.uid.slice(0,6)}... <Copy size={8} className="ml-1"/></span></div>
+                <div className="text-[10px] text-zinc-500 font-mono flex items-center space-x-1"><span>LVL {Math.floor(userData?.xp / 1000) + 1}</span><span>•</span><span className="text-blue-400">{userData?.xp || 0} XP</span></div>
             </div>
         </div>
         <div className="flex items-start space-x-2 pointer-events-auto">
@@ -445,6 +507,8 @@ export default function PalmostreetApp() {
 
       {/* VIEWS (Scrollable Container) */}
       <main className="absolute inset-0 pt-20 pb-24 px-4 w-full h-full overflow-y-auto">
+        
+        {/* VIEW: GARAGE */}
         {view === 'garage' && (
             <div className="space-y-6 animate-in slide-in-from-bottom-4 w-full pb-8">
                 <div className="flex justify-between items-end w-full"><h2 className="text-2xl font-orbitron font-bold text-white">GARAGE</h2><span className="text-xs font-mono text-zinc-500">{cars.length} AUTO</span></div>
@@ -462,6 +526,7 @@ export default function PalmostreetApp() {
             </div>
         )}
 
+        {/* VIEW: SCANNER */}
         {view === 'scan' && (
             <div className="flex flex-col items-center justify-center min-h-full w-full space-y-6 py-10">
                 
@@ -504,14 +569,25 @@ export default function PalmostreetApp() {
             </div>
         )}
 
+        {/* VIEW: SOCIAL & SEASON */}
         {view === 'social' && (
             <div className="space-y-8 animate-in slide-in-from-right w-full pb-8">
                 <div>
-                    <h3 className="font-orbitron font-bold text-white mb-4 flex items-center"><Target className="mr-2 text-red-500" /> OBIETTIVI GIORNALIERI</h3>
+                    <h3 className="font-orbitron font-bold text-white mb-4 flex items-center"><Target className="mr-2 text-red-500" /> STAGIONE 1</h3>
                     <div className="space-y-3">
-                        {objectives.map(obj => (
-                            <div key={obj.id} className={`p-4 rounded-xl border border-white/10 bg-gradient-to-r ${RARITY_CONFIG[obj.rarity].bg} flex justify-between items-center w-full`}><div><div className="font-bold text-sm text-white">{obj.text}</div><div className="text-[10px] text-zinc-400 mt-1 flex space-x-3"><span className="text-blue-400 font-bold">+{obj.xp} XP</span></div></div><div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${obj.done ? 'bg-green-500 border-green-500' : 'border-zinc-600'}`}>{obj.done && <CheckCircle size={14} className="text-black" />}</div></div>
-                        ))}
+                        {OBJECTIVES_LIST.map(obj => {
+                            const isDone = userData?.objectives?.[obj.id];
+                            return (
+                                <div key={obj.id} className={`p-4 rounded-xl border ${isDone ? 'border-green-500 bg-green-900/20' : 'border-white/10 bg-gradient-to-r ' + RARITY_CONFIG[obj.rarity].bg} flex justify-between items-center w-full relative overflow-hidden`}>
+                                    {isDone && <div className="absolute inset-0 bg-green-500/10 pointer-events-none"></div>}
+                                    <div>
+                                        <div className="font-bold text-sm text-white">{obj.text}</div>
+                                        <div className="text-[10px] text-zinc-400 mt-1 flex space-x-3"><span className="text-blue-400 font-bold">+{obj.xp} XP</span></div>
+                                    </div>
+                                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${isDone ? 'bg-green-500 border-green-500' : 'border-zinc-600'}`}>{isDone && <CheckCircle size={14} className="text-black" />}</div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
                 <div>
@@ -520,12 +596,77 @@ export default function PalmostreetApp() {
                 </div>
             </div>
         )}
+
+        {/* VIEW: DASHBOARD (PROFILO) */}
+        {view === 'profile' && (
+            <div className="space-y-6 animate-in slide-in-from-right w-full pb-8">
+                {/* Profile Header */}
+                <div className="bg-gradient-to-br from-slate-900 to-black p-6 rounded-3xl border border-white/10 text-center relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
+                    <div className="w-24 h-24 mx-auto rounded-full border-4 border-red-600 overflow-hidden mb-4 shadow-[0_0_20px_rgba(220,38,38,0.3)]">
+                        <img src={userData?.avatar} className="w-full h-full object-cover" />
+                    </div>
+                    <h2 className="text-2xl font-orbitron font-bold text-white">{userData?.nickname}</h2>
+                    <p className="text-xs text-zinc-500 uppercase tracking-widest mb-6 flex justify-center items-center">
+                        ID: {user.uid.slice(0,8)} <Copy size={10} className="ml-1 cursor-pointer" onClick={() => navigator.clipboard.writeText(user.uid)}/>
+                    </p>
+                    
+                    <div className="flex justify-center space-x-8 border-t border-white/5 pt-4">
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-white font-mono">{cars.length}</div>
+                            <div className="text-[9px] uppercase text-zinc-500 tracking-wider">Auto</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-400 font-mono">{userData?.xp || 0}</div>
+                            <div className="text-[9px] uppercase text-zinc-500 tracking-wider">XP Totali</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-2xl font-bold text-yellow-500 font-mono">1</div>
+                            <div className="text-[9px] uppercase text-zinc-500 tracking-wider">Stagione</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Garage Value */}
+                <div className="bg-slate-900/50 p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                        <div className="bg-green-900/20 p-2 rounded-lg"><DollarSign className="text-green-500" /></div>
+                        <div>
+                            <div className="text-xs text-zinc-400 uppercase">Valore Garage</div>
+                            <div className="text-xl font-bold text-white font-mono">€{calculateGarageValue().toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <TrendingUp className="text-green-500/20" size={48} />
+                </div>
+
+                {/* Collection Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-yellow-500/20">
+                        <div className="text-[10px] text-zinc-500 uppercase mb-1">Leggendarie</div>
+                        <div className="text-2xl font-bold text-yellow-500">{countRarity('Legendary')}</div>
+                    </div>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-purple-500/20">
+                        <div className="text-[10px] text-zinc-500 uppercase mb-1">Epiche</div>
+                        <div className="text-2xl font-bold text-purple-500">{countRarity('Epic')}</div>
+                    </div>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-orange-500/20">
+                        <div className="text-[10px] text-zinc-500 uppercase mb-1">Vintage</div>
+                        <div className="text-2xl font-bold text-orange-500">{countRarity('Vintage')}</div>
+                    </div>
+                    <div className="bg-slate-900/50 p-3 rounded-xl border border-blue-500/20">
+                        <div className="text-[10px] text-zinc-500 uppercase mb-1">Super Rare</div>
+                        <div className="text-2xl font-bold text-blue-500">{countRarity('SuperRare')}</div>
+                    </div>
+                </div>
+            </div>
+        )}
+
       </main>
 
       <nav className="fixed bottom-0 left-0 w-full bg-slate-950/90 backdrop-blur-lg border-t border-white/10 pb-6 pt-2 px-6 flex justify-between items-end z-40">
         <button onClick={() => setView('garage')} className={`flex flex-col items-center space-y-1 transition-all ${view === 'garage' ? 'text-red-500 -translate-y-2' : 'text-zinc-600'}`}><Warehouse size={view === 'garage' ? 28 : 24} /><span className="text-[9px] font-bold tracking-widest">GARAGE</span></button>
         <div className="relative -top-6"><button onClick={() => setView('scan')} className="w-16 h-16 bg-red-600 rounded-full border-4 border-slate-950 flex items-center justify-center text-white shadow-[0_0_20px_rgba(220,38,38,0.5)] hover:scale-105 transition-transform"><ScanLine size={32} /></button></div>
-        <button onClick={() => setView('social')} className={`flex flex-col items-center space-y-1 transition-all ${view === 'social' ? 'text-blue-500 -translate-y-2' : 'text-zinc-600'}`}><TrendingUp size={view === 'social' ? 28 : 24} /><span className="text-[9px] font-bold tracking-widest">SOCIAL</span></button>
+        <button onClick={() => setView('social')} className={`flex flex-col items-center space-y-1 transition-all ${view === 'social' ? 'text-blue-500 -translate-y-2' : 'text-zinc-600'}`}><TrendingUp size={view === 'social' ? 28 : 24} /><span className="text-[9px] font-bold tracking-widest">STAGIONE</span></button>
       </nav>
     </div>
   );

@@ -24,7 +24,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app); 
-const appId = 'palmostreet-v19-ultimate-polish';
+const appId = 'palmostreet-v20-ultimate-final';
 
 // --- UTILS & CONSTANTS ---
 const API_KEY_STORAGE_KEY = 'palmostreet_gemini_key';
@@ -39,6 +39,7 @@ const RARITY_CONFIG: any = {
   Common: { color: "text-white", border: "border-slate-500", bg: "bg-slate-900/80", shadow: "shadow-slate-500/20", gradient: "from-slate-800 via-black to-black" },
 };
 
+// --- HELPERS ---
 const calculateLevel = (xp: number) => {
     let level = 1;
     let requiredXp = 1000; 
@@ -134,7 +135,6 @@ const ImageViewerModal = ({ imageUrl, timestamp, onClose }: any) => (
 );
 
 // --- CAR DETAIL COMPONENT (REUSABLE) ---
-// Usato sia per le proprie auto che per quelle degli amici
 const CarDetailView = ({ car, onClose, onSave, onDelete, isOwner, onToggleFavorite }: any) => {
     const [fullScreen, setFullScreen] = useState(false);
 
@@ -392,7 +392,6 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
   );
 };
 
-// --- SETTINGS MODAL ---
 const SettingsModal = ({ onClose, currentKey, onSaveKey, userProfile }: any) => {
   const [key, setKey] = useState(currentKey);
   const [newNickname, setNewNickname] = useState(userProfile?.nickname || '');
@@ -481,13 +480,12 @@ export default function PalmostreetApp() {
       if (u) {
         const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => { 
             if (doc.exists()) { setUserData(doc.data()); 
-                // FETCH FRIENDS DETAILS
                 const friendIds = doc.data().friends || [];
                 const friendsData: any[] = [];
                 friendIds.forEach(async (f: any) => {
                     const fDoc = await getDoc(doc(db, 'artifacts', appId, 'users', f.id));
                     if (fDoc.exists()) friendsData.push({ ...f, ...fDoc.data() });
-                    else friendsData.push(f); // Fallback if user not found
+                    else friendsData.push(f);
                     setFriends([...friendsData]);
                 });
                 if (friendIds.length === 0) setFriends([]);
@@ -558,7 +556,6 @@ export default function PalmostreetApp() {
         let aiResult;
         if (apiKey) {
            try {
-             // MODIFICA AI PROMPT: Stretto Italiano per History
              const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: "Analyze this car image. Return strictly JSON with: brand (string), model (string), year (number), hp (number), value_eur (number estimated market value), list_price_eur (number original list price), engine_type (string e.g. V8, I4 Turbo), nationality (string e.g. Italy, Germany), history (string short fun fact/history in ITALIAN language max 1 sentence), description (italian string), scores: { speed (1-5), versatility (1-5), quality_price (1-5), durability (1-5) }" }, { inlineData: { mimeType: 'image/jpeg', data: base64Data } }] }] }) });
              const data = await response.json();
              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -781,73 +778,3 @@ export default function PalmostreetApp() {
     </div>
   );
 }
-
-// --- CAR DETAIL COMPONENT (REUSABLE) ---
-const CarDetailView = ({ car, onClose, onSave, onDelete, isOwner, onToggleFavorite }: any) => {
-    const [fullScreen, setFullScreen] = useState(false);
-
-    if (fullScreen) return <ImageViewerModal imageUrl={car.imageUrl} timestamp={car.timestamp} onClose={() => setFullScreen(false)} />;
-
-    return (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
-            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[car.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[car.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto z-10`}>
-                <div className="relative h-64 w-full bg-black group" onClick={() => setFullScreen(true)}>
-                    <img src={car.imageUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-                    <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors z-10"><X size={24} className="text-white" /></button>
-                    
-                    {isOwner && !car.isPreview && (
-                        <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(car); }} className={`absolute top-4 left-4 p-2 rounded-full transition-colors z-10 ${car.isFavorite ? 'bg-red-600 text-white' : 'bg-black/50 text-zinc-400 hover:text-white'}`}>
-                            <Heart size={24} fill={car.isFavorite ? "currentColor" : "none"} />
-                        </button>
-                    )}
-
-                    <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
-                        <div>
-                            <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-black/80 border ${RARITY_CONFIG[car.rarity].color} ${RARITY_CONFIG[car.rarity].border} mb-2 inline-block`}>{car.rarity}</span>
-                            <h2 className="text-3xl font-orbitron font-black text-white italic uppercase leading-none">{car.model}</h2>
-                            <p className="text-zinc-400 font-bold uppercase tracking-widest flex items-center">{car.brand} {car.nationality && <span className="ml-2 text-[10px] border border-white/20 px-1 rounded flex items-center"><Flag size={10} className="mr-1"/> {car.nationality}</span>}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="p-6 space-y-6">
-                    {car.isSimulation && (<div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg flex items-start space-x-3"><Key className="text-yellow-500 shrink-0 mt-1" size={18} /><div><h4 className="text-sm font-bold text-yellow-500">MODALITÀ SIMULAZIONE</h4><p className="text-xs text-zinc-400 mt-1">Vai in Impostazioni e inserisci API Key per dati reali.</p></div></div>)}
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Valore Mercato</span><span className="text-lg font-mono text-green-400">€{car.value?.toLocaleString()}</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Potenza</span><span className="text-lg font-mono text-red-400">{car.hp} HP</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Listino Originale</span><span className="text-sm font-mono text-zinc-300">€{car.list_price?.toLocaleString() || 'N/A'}</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Motore</span><span className="text-sm font-mono text-zinc-300 flex items-center"><Fuel size={12} className="mr-1"/> {car.engine || 'N/A'}</span></div>
-                    </div>
-
-                    {car.history && (
-                        <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
-                            <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center"><Activity size={14} className="mr-1"/> LO SAPEVI CHE?</h4>
-                            <p className="text-xs text-zinc-300 italic leading-relaxed">"{car.history}"</p>
-                        </div>
-                    )}
-
-                    <div className="space-y-3"><h3 className="font-orbitron text-sm text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-1">Performance Index</h3>{car.scores && Object.entries(car.scores).map(([key, score]) => (<div key={key} className="flex items-center justify-between"><span className="text-xs uppercase text-zinc-300 font-bold w-24">{(key as string).replace('_', ' ')}</span><div className="flex-1 h-2 bg-black rounded-full mx-3 overflow-hidden"><div className={`h-full ${(score as number) >= 4 ? 'bg-green-500' : (score as number) >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${((score as number)/5)*100}%`}}></div></div><span className="text-xs font-mono font-bold w-6 text-right">{score as number}/5</span></div>))}</div>
-                    
-                    {/* Actions based on ownership */}
-                    {isOwner ? (
-                        car.isPreview ? (
-                            <button onClick={onSave} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center space-x-2 active:scale-95 transition-transform"><span>VAI AL GARAGE</span><ChevronRight size={20} /></button>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600 flex items-center"><Calendar size={12} className="mr-1"/> {car.timestamp?.toDate().toLocaleDateString()}</span></div>
-                                <button onClick={() => onDelete(car.id)} className="w-full border border-red-900/50 bg-red-950/20 text-red-700 py-3 rounded-xl font-bold uppercase text-xs flex items-center justify-center hover:bg-red-900/40 hover:text-red-500 transition-colors"><Trash2 size={14} className="mr-2" /> ROTTAMA AUTOMOBILE</button>
-                            </div>
-                        )
-                    ) : (
-                        <div className="flex justify-center pt-4 border-t border-white/10">
-                             <span className="text-xs text-zinc-500 italic">Auto di proprietà di un amico</span>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-};

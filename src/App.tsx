@@ -24,12 +24,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app); 
-const appId = 'palmostreet-v16-garage-plus';
+const appId = 'palmostreet-v19-ultimate-polish';
 
 // --- UTILS & CONSTANTS ---
 const API_KEY_STORAGE_KEY = 'palmostreet_gemini_key';
-
-// Avatar di default
 const DEFAULT_USER_AVATAR = "https://cdn-icons-png.flaticon.com/512/847/847969.png"; 
 
 const RARITY_CONFIG: any = {
@@ -41,7 +39,6 @@ const RARITY_CONFIG: any = {
   Common: { color: "text-white", border: "border-slate-500", bg: "bg-slate-900/80", shadow: "shadow-slate-500/20", gradient: "from-slate-800 via-black to-black" },
 };
 
-// --- HELPERS ---
 const calculateLevel = (xp: number) => {
     let level = 1;
     let requiredXp = 1000; 
@@ -128,16 +125,144 @@ const NotificationPopup = ({ type, title, subtitle, onClose }: any) => {
     );
 };
 
-// --- IMAGE VIEWER MODAL (FULLSCREEN) ---
 const ImageViewerModal = ({ imageUrl, timestamp, onClose }: any) => (
     <div className="fixed inset-0 z-[90] bg-black flex flex-col items-center justify-center animate-in zoom-in-95" onClick={onClose}>
         <img src={imageUrl} className="max-w-full max-h-full object-contain" />
-        <div className="absolute bottom-10 left-0 right-0 text-center">
-            <p className="text-xs text-zinc-500 font-mono bg-black/50 inline-block px-3 py-1 rounded-full backdrop-blur-md">
-                SCATTATA IL: {timestamp?.toDate().toLocaleString()}
-            </p>
-        </div>
+        {timestamp && <div className="absolute bottom-10 left-0 right-0 text-center"><p className="text-xs text-zinc-500 font-mono bg-black/50 inline-block px-3 py-1 rounded-full backdrop-blur-md">SCATTATA IL: {timestamp?.toDate().toLocaleString()}</p></div>}
         <button className="absolute top-6 right-6 p-2 bg-black/50 rounded-full text-white"><X size={24} /></button>
+    </div>
+);
+
+// --- CAR DETAIL COMPONENT (REUSABLE) ---
+// Usato sia per le proprie auto che per quelle degli amici
+const CarDetailView = ({ car, onClose, onSave, onDelete, isOwner, onToggleFavorite }: any) => {
+    const [fullScreen, setFullScreen] = useState(false);
+
+    if (fullScreen) return <ImageViewerModal imageUrl={car.imageUrl} timestamp={car.timestamp} onClose={() => setFullScreen(false)} />;
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[car.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[car.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto z-10`}>
+                <div className="relative h-64 w-full bg-black group" onClick={() => setFullScreen(true)}>
+                    <img src={car.imageUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                    <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors z-10"><X size={24} className="text-white" /></button>
+                    
+                    {isOwner && !car.isPreview && (
+                        <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(car); }} className={`absolute top-4 left-4 p-2 rounded-full transition-colors z-10 ${car.isFavorite ? 'bg-red-600 text-white' : 'bg-black/50 text-zinc-400 hover:text-white'}`}>
+                            <Heart size={24} fill={car.isFavorite ? "currentColor" : "none"} />
+                        </button>
+                    )}
+
+                    <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+                        <div>
+                            <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-black/80 border ${RARITY_CONFIG[car.rarity].color} ${RARITY_CONFIG[car.rarity].border} mb-2 inline-block`}>{car.rarity}</span>
+                            <h2 className="text-3xl font-orbitron font-black text-white italic uppercase leading-none">{car.model}</h2>
+                            <p className="text-zinc-400 font-bold uppercase tracking-widest flex items-center">{car.brand} {car.nationality && <span className="ml-2 text-[10px] border border-white/20 px-1 rounded flex items-center"><Flag size={10} className="mr-1"/> {car.nationality}</span>}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    {car.isSimulation && (<div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg flex items-start space-x-3"><Key className="text-yellow-500 shrink-0 mt-1" size={18} /><div><h4 className="text-sm font-bold text-yellow-500">MODALITÀ SIMULAZIONE</h4><p className="text-xs text-zinc-400 mt-1">Vai in Impostazioni e inserisci API Key per dati reali.</p></div></div>)}
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Valore Mercato</span><span className="text-lg font-mono text-green-400">€{car.value?.toLocaleString()}</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Potenza</span><span className="text-lg font-mono text-red-400">{car.hp} HP</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Listino Originale</span><span className="text-sm font-mono text-zinc-300">€{car.list_price?.toLocaleString() || 'N/A'}</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Motore</span><span className="text-sm font-mono text-zinc-300 flex items-center"><Fuel size={12} className="mr-1"/> {car.engine || 'N/A'}</span></div>
+                    </div>
+
+                    {car.history && (
+                        <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
+                            <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center"><Activity size={14} className="mr-1"/> LO SAPEVI CHE?</h4>
+                            <p className="text-xs text-zinc-300 italic leading-relaxed">"{car.history}"</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-3"><h3 className="font-orbitron text-sm text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-1">Performance Index</h3>{car.scores && Object.entries(car.scores).map(([key, score]) => (<div key={key} className="flex items-center justify-between"><span className="text-xs uppercase text-zinc-300 font-bold w-24">{(key as string).replace('_', ' ')}</span><div className="flex-1 h-2 bg-black rounded-full mx-3 overflow-hidden"><div className={`h-full ${(score as number) >= 4 ? 'bg-green-500' : (score as number) >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${((score as number)/5)*100}%`}}></div></div><span className="text-xs font-mono font-bold w-6 text-right">{score as number}/5</span></div>))}</div>
+                    
+                    {/* Actions based on ownership */}
+                    {isOwner ? (
+                        car.isPreview ? (
+                            <button onClick={onSave} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center space-x-2 active:scale-95 transition-transform"><span>VAI AL GARAGE</span><ChevronRight size={20} /></button>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600 flex items-center"><Calendar size={12} className="mr-1"/> {car.timestamp?.toDate().toLocaleDateString()}</span></div>
+                                <button onClick={() => onDelete(car.id)} className="w-full border border-red-900/50 bg-red-950/20 text-red-700 py-3 rounded-xl font-bold uppercase text-xs flex items-center justify-center hover:bg-red-900/40 hover:text-red-500 transition-colors"><Trash2 size={14} className="mr-2" /> ROTTAMA AUTOMOBILE</button>
+                            </div>
+                        )
+                    ) : (
+                        <div className="flex justify-center pt-4 border-t border-white/10">
+                             <span className="text-xs text-zinc-500 italic">Auto di proprietà di un amico</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- FRIEND GARAGE MODAL ---
+const FriendGarageModal = ({ friendId, onClose }: any) => {
+    const [friendCars, setFriendCars] = useState<any[]>([]);
+    const [friendName, setFriendName] = useState('Amico');
+    const [loading, setLoading] = useState(true);
+    const [selectedFriendCar, setSelectedFriendCar] = useState<any>(null); 
+
+    useEffect(() => {
+        const loadFriendData = async () => {
+            try {
+                const userDoc = await getDoc(doc(db, 'artifacts', appId, 'users', friendId));
+                if (userDoc.exists()) setFriendName(userDoc.data().nickname || 'Amico');
+                const q = query(collection(db, 'artifacts', appId, 'users', friendId, 'garage'), orderBy('timestamp', 'desc'));
+                const snapshot = await getDocs(q);
+                setFriendCars(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
+            } catch (error) { console.error(error); } finally { setLoading(false); }
+        };
+        loadFriendData();
+    }, [friendId]);
+
+    return (
+        <div className="fixed inset-0 z-[80] bg-slate-950 w-screen h-screen overflow-y-auto animate-in slide-in-from-right duration-300">
+            {selectedFriendCar && (
+                <CarDetailView 
+                    car={selectedFriendCar} 
+                    onClose={() => setSelectedFriendCar(null)} 
+                    isOwner={false} // Friend's car, read only
+                />
+            )}
+
+            <div className="sticky top-0 bg-slate-900/90 backdrop-blur-md p-4 border-b border-white/10 flex items-center space-x-4 z-10">
+                <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10"><ArrowLeft className="text-white" /></button>
+                <div><h2 className="font-orbitron font-bold text-white text-lg">GARAGE DI {friendName.toUpperCase()}</h2><p className="text-xs text-zinc-400">{friendCars.length} AUTO</p></div>
+            </div>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 pb-24">
+                {loading ? (<div className="col-span-full text-center py-20 text-zinc-500">Caricamento garage...</div>) : friendCars.length === 0 ? (<div className="col-span-full text-center py-20 text-zinc-500">Questo garage è vuoto.</div>) : (
+                    friendCars.map(car => (
+                        <div key={car.id} className="relative bg-slate-900 border-2 border-slate-700 rounded-xl overflow-hidden cursor-pointer" onClick={() => setSelectedFriendCar(car)}>
+                            <div className="h-40 w-full bg-black relative"><img src={car.imageUrl} className="w-full h-full object-cover opacity-80" /><div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-white border border-white/20">{car.rarity}</div></div>
+                            <div className="p-3"><h3 className="font-orbitron font-bold text-white leading-none">{car.model}</h3><p className="text-[10px] text-zinc-500 uppercase">{car.brand}</p><div className="mt-2 text-xs font-mono text-zinc-400">{car.hp} HP • €{car.value?.toLocaleString()}</div></div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
+
+const ConfirmationModal = ({ title, message, onConfirm, onCancel, isDestructive = false }: any) => (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in">
+        <div className={`bg-slate-900 border-2 ${isDestructive ? 'border-red-600' : 'border-white/20'} p-6 rounded-2xl w-full max-w-xs text-center shadow-2xl`}>
+            {isDestructive && <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />}
+            <h3 className="font-orbitron font-bold text-white text-lg mb-2">{title}</h3>
+            <p className="text-xs text-zinc-400 mb-6 leading-relaxed">{message}</p>
+            <div className="flex space-x-3">
+                <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-zinc-400 border border-white/10 hover:bg-white/5">ANNULLA</button>
+                <button onClick={onConfirm} className={`flex-1 py-3 rounded-xl font-bold text-white ${isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600'}`}>CONFERMA</button>
+            </div>
+        </div>
     </div>
 );
 
@@ -258,7 +383,6 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
                 </div>
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleAvatarUpload} />
             </div>
-            
             <div className="space-y-4">
                 <input type="text" placeholder="Scegli il tuo Nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} className="w-full bg-black/50 border border-white/20 p-4 rounded-xl text-white text-center font-bold focus:border-red-500 outline-none transition-colors" />
                 <button onClick={handleProfileSetup} disabled={loading || !nickname} className="w-full bg-red-600 hover:bg-red-500 py-4 rounded-xl font-bold font-orbitron text-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-[0_0_20px_rgba(220,38,38,0.4)]">{loading ? 'SALVATAGGIO...' : 'INIZIA CARRIERA'}</button>
@@ -303,63 +427,6 @@ const SettingsModal = ({ onClose, currentKey, onSaveKey, userProfile }: any) => 
   );
 };
 
-const ConfirmationModal = ({ title, message, onConfirm, onCancel, isDestructive = false }: any) => (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in">
-        <div className={`bg-slate-900 border-2 ${isDestructive ? 'border-red-600' : 'border-white/20'} p-6 rounded-2xl w-full max-w-xs text-center shadow-2xl`}>
-            {isDestructive && <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />}
-            <h3 className="font-orbitron font-bold text-white text-lg mb-2">{title}</h3>
-            <p className="text-xs text-zinc-400 mb-6 leading-relaxed">{message}</p>
-            <div className="flex space-x-3">
-                <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-zinc-400 border border-white/10 hover:bg-white/5">ANNULLA</button>
-                <button onClick={onConfirm} className={`flex-1 py-3 rounded-xl font-bold text-white ${isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600'}`}>CONFERMA</button>
-            </div>
-        </div>
-    </div>
-);
-
-// --- FRIEND GARAGE MODAL ---
-const FriendGarageModal = ({ friendId, onClose }: any) => {
-    const [friendCars, setFriendCars] = useState<any[]>([]);
-    const [friendName, setFriendName] = useState('Amico');
-    const [loading, setLoading] = useState(true);
-    const [selectedCar, setSelectedCar] = useState<any>(null); 
-    const [fullScreenImage, setFullScreenImage] = useState<string | null>(null); 
-
-    useEffect(() => {
-        const loadFriendData = async () => {
-            try {
-                const userDoc = await getDoc(doc(db, 'artifacts', appId, 'users', friendId));
-                if (userDoc.exists()) setFriendName(userDoc.data().nickname || 'Amico');
-                const q = query(collection(db, 'artifacts', appId, 'users', friendId, 'garage'), orderBy('timestamp', 'desc'));
-                const snapshot = await getDocs(q);
-                setFriendCars(snapshot.docs.map(d => ({id: d.id, ...d.data()})));
-            } catch (error) { console.error(error); } finally { setLoading(false); }
-        };
-        loadFriendData();
-    }, [friendId]);
-
-    return (
-        <div className="fixed inset-0 z-[80] bg-slate-950 w-screen h-screen overflow-y-auto animate-in slide-in-from-right duration-300">
-            {fullScreenImage && <ImageViewerModal imageUrl={fullScreenImage} timestamp={null} onClose={() => setFullScreenImage(null)} />}
-            
-            <div className="sticky top-0 bg-slate-900/90 backdrop-blur-md p-4 border-b border-white/10 flex items-center space-x-4 z-10">
-                <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10"><ArrowLeft className="text-white" /></button>
-                <div><h2 className="font-orbitron font-bold text-white text-lg">GARAGE DI {friendName.toUpperCase()}</h2><p className="text-xs text-zinc-400">{friendCars.length} AUTO</p></div>
-            </div>
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 pb-24">
-                {loading ? (<div className="col-span-full text-center py-20 text-zinc-500">Caricamento garage...</div>) : friendCars.length === 0 ? (<div className="col-span-full text-center py-20 text-zinc-500">Questo garage è vuoto.</div>) : (
-                    friendCars.map(car => (
-                        <div key={car.id} className="relative bg-slate-900 border-2 border-slate-700 rounded-xl overflow-hidden" onClick={() => setFullScreenImage(car.imageUrl)}>
-                            <div className="h-40 w-full bg-black relative"><img src={car.imageUrl} className="w-full h-full object-cover opacity-80" /><div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-white border border-white/20">{car.rarity}</div></div>
-                            <div className="p-3"><h3 className="font-orbitron font-bold text-white leading-none">{car.model}</h3><p className="text-[10px] text-zinc-500 uppercase">{car.brand}</p><div className="mt-2 text-xs font-mono text-zinc-400">{car.hp} HP • €{car.value?.toLocaleString()}</div></div>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
-    );
-};
-
 const OBJECTIVES_LIST = [
     { id: 'first_scan', text: "Scansiona la tua prima auto", xp: 200, rarity: "Common" },
     { id: 'find_legendary', text: "Trova una Leggendaria", xp: 2000, rarity: "Legendary" },
@@ -385,17 +452,15 @@ export default function PalmostreetApp() {
   const [itemToDelete, setItemToDelete] = useState<{type: 'car'|'friend', id: string} | null>(null);
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   
-  // Garage View State
-  const [gridColumns, setGridColumns] = useState(1); // 1 = large, 2 = compact
-
+  const [gridColumns, setGridColumns] = useState(1);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null); 
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSettings, setShowSettings] = useState(false);
 
   const levelInfo = userData ? calculateLevel(userData.xp || 0) : { level: 1, currentLevelXp: 0, nextLevelXp: 100 };
 
-  // Sort cars: Favorites first, then by timestamp
   const sortedCars = [...cars].sort((a, b) => {
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
@@ -415,7 +480,18 @@ export default function PalmostreetApp() {
       setUser(u);
       if (u) {
         const unsubUser = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid), (doc) => { 
-            if (doc.exists()) { setUserData(doc.data()); setFriends(doc.data().friends || []); } else { setUserData(null); } 
+            if (doc.exists()) { setUserData(doc.data()); 
+                // FETCH FRIENDS DETAILS
+                const friendIds = doc.data().friends || [];
+                const friendsData: any[] = [];
+                friendIds.forEach(async (f: any) => {
+                    const fDoc = await getDoc(doc(db, 'artifacts', appId, 'users', f.id));
+                    if (fDoc.exists()) friendsData.push({ ...f, ...fDoc.data() });
+                    else friendsData.push(f); // Fallback if user not found
+                    setFriends([...friendsData]);
+                });
+                if (friendIds.length === 0) setFriends([]);
+            } else { setUserData(null); } 
         });
         const qCars = query(collection(db, 'artifacts', appId, 'users', u.uid, 'garage'), orderBy('timestamp', 'desc'));
         const unsubCars = onSnapshot(qCars, (snap) => { 
@@ -482,7 +558,8 @@ export default function PalmostreetApp() {
         let aiResult;
         if (apiKey) {
            try {
-             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: "Analyze this car image. Return strictly JSON with: brand (string), model (string), year (number), hp (number), value_eur (number estimated market value), list_price_eur (number original list price), engine_type (string e.g. V8, I4 Turbo), nationality (string e.g. Italy, Germany), history (string short fun fact/history 1 sentence), description (italian string), scores: { speed (1-5), versatility (1-5), quality_price (1-5), durability (1-5) }" }, { inlineData: { mimeType: 'image/jpeg', data: base64Data } }] }] }) });
+             // MODIFICA AI PROMPT: Stretto Italiano per History
+             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: "Analyze this car image. Return strictly JSON with: brand (string), model (string), year (number), hp (number), value_eur (number estimated market value), list_price_eur (number original list price), engine_type (string e.g. V8, I4 Turbo), nationality (string e.g. Italy, Germany), history (string short fun fact/history in ITALIAN language max 1 sentence), description (italian string), scores: { speed (1-5), versatility (1-5), quality_price (1-5), durability (1-5) }" }, { inlineData: { mimeType: 'image/jpeg', data: base64Data } }] }] }) });
              const data = await response.json();
              const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
              if(text) { const jsonMatch = text.match(/\{[\s\S]*\}/); aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null; }
@@ -496,6 +573,23 @@ export default function PalmostreetApp() {
         const newCar = { ...aiResult, value: aiResult.value_eur, list_price: aiResult.list_price_eur, engine: aiResult.engine_type, nationality: aiResult.nationality, history: aiResult.history, rarity: rarity, imageUrl: compressedBase64, timestamp: serverTimestamp(), method: 'AI_VISION', isFavorite: false };
         setSelectedCar({ ...newCar, isPreview: true });
     } catch (error: any) { console.error("Error:", error); alert("Errore durante l'analisi: " + error.message); } finally { setLoading(false); }
+  };
+
+  const handleProfilePictureUpload = async (e: any) => {
+    const file = e.target.files[0];
+    if (!file || !user) return;
+    setLoading(true);
+    try {
+        const compressedBase64 = await resizeImage(file, 300);
+        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { avatar: compressedBase64 });
+        await updateProfile(user, { photoURL: compressedBase64 });
+        setNotification({ type: 'success', title: "FOTO AGGIORNATA", subtitle: "La tua immagine profilo è stata cambiata." });
+    } catch (error: any) {
+        console.error("Errore caricamento foto profilo:", error);
+        alert("Errore durante il caricamento della foto.");
+    } finally {
+        setLoading(false);
+    }
   };
 
   const saveCarToGarage = async () => {
@@ -528,50 +622,7 @@ export default function PalmostreetApp() {
       {viewingFriend && <FriendGarageModal friendId={viewingFriend} onClose={() => setViewingFriend(null)} />}
       {fullScreenImage && <ImageViewerModal imageUrl={fullScreenImage} timestamp={selectedCar?.timestamp} onClose={() => setFullScreenImage(null)} />}
 
-      {selectedCar && (
-        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !selectedCar.isPreview && setSelectedCar(null)}></div>
-            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[selectedCar.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[selectedCar.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto z-10`}>
-                <div className="relative h-64 w-full bg-black group" onClick={() => !selectedCar.isPreview && setFullScreenImage(selectedCar.imageUrl)}>
-                    <img src={selectedCar.imageUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-                    <button onClick={(e) => { e.stopPropagation(); setSelectedCar(null); }} className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors z-10"><X size={24} className="text-white" /></button>
-                    {!selectedCar.isPreview && <button onClick={(e) => { e.stopPropagation(); toggleFavorite(selectedCar); }} className={`absolute top-4 left-4 p-2 rounded-full transition-colors z-10 ${selectedCar.isFavorite ? 'bg-red-600 text-white' : 'bg-black/50 text-zinc-400 hover:text-white'}`}><Heart size={24} fill={selectedCar.isFavorite ? "currentColor" : "none"} /></button>}
-                    <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end"><div><span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-black/80 border ${RARITY_CONFIG[selectedCar.rarity].color} ${RARITY_CONFIG[selectedCar.rarity].border} mb-2 inline-block`}>{selectedCar.rarity}</span><h2 className="text-3xl font-orbitron font-black text-white italic uppercase leading-none">{selectedCar.model}</h2><p className="text-zinc-400 font-bold uppercase tracking-widest flex items-center">{selectedCar.brand} {selectedCar.nationality && <span className="ml-2 text-[10px] border border-white/20 px-1 rounded flex items-center"><Flag size={10} className="mr-1"/> {selectedCar.nationality}</span>}</p></div></div>
-                </div>
-                <div className="p-6 space-y-6">
-                    {selectedCar.isSimulation && (<div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg flex items-start space-x-3"><Key className="text-yellow-500 shrink-0 mt-1" size={18} /><div><h4 className="text-sm font-bold text-yellow-500">MODALITÀ SIMULAZIONE</h4><p className="text-xs text-zinc-400 mt-1">Vai in Impostazioni e inserisci API Key per dati reali.</p></div></div>)}
-                    
-                    {/* INFO GRID */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Valore Mercato</span><span className="text-lg font-mono text-green-400">€{selectedCar.value?.toLocaleString()}</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Potenza</span><span className="text-lg font-mono text-red-400">{selectedCar.hp} HP</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Listino Originale</span><span className="text-sm font-mono text-zinc-300">€{selectedCar.list_price?.toLocaleString() || 'N/A'}</span></div>
-                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Motore</span><span className="text-sm font-mono text-zinc-300 flex items-center"><Fuel size={12} className="mr-1"/> {selectedCar.engine || 'N/A'}</span></div>
-                    </div>
-
-                    {/* HISTORY SECTION */}
-                    {selectedCar.history && (
-                        <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
-                            <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center"><Activity size={14} className="mr-1"/> LO SAPEVI CHE?</h4>
-                            <p className="text-xs text-zinc-300 italic leading-relaxed">"{selectedCar.history}"</p>
-                        </div>
-                    )}
-
-                    <div className="space-y-3"><h3 className="font-orbitron text-sm text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-1">Performance Index</h3>{selectedCar.scores && Object.entries(selectedCar.scores).map(([key, score]) => (<div key={key} className="flex items-center justify-between"><span className="text-xs uppercase text-zinc-300 font-bold w-24">{(key as string).replace('_', ' ')}</span><div className="flex-1 h-2 bg-black rounded-full mx-3 overflow-hidden"><div className={`h-full ${(score as number) >= 4 ? 'bg-green-500' : (score as number) >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${((score as number)/5)*100}%`}}></div></div><span className="text-xs font-mono font-bold w-6 text-right">{score as number}/5</span></div>))}</div>
-                    
-                    {/* BUTTON VAI AL GARAGE OR ROTTAMA */}
-                    {selectedCar.isPreview ? (
-                        <button onClick={saveCarToGarage} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center space-x-2 active:scale-95 transition-transform"><span>VAI AL GARAGE</span><ChevronRight size={20} /></button>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600 flex items-center"><Calendar size={12} className="mr-1"/> {selectedCar.timestamp?.toDate().toLocaleDateString()}</span></div>
-                            <button onClick={() => setItemToDelete({type: 'car', id: selectedCar.id})} className="w-full border border-red-900/50 bg-red-950/20 text-red-700 py-3 rounded-xl font-bold uppercase text-xs flex items-center justify-center hover:bg-red-900/40 hover:text-red-500 transition-colors"><Trash2 size={14} className="mr-2" /> ROTTAMA AUTOMOBILE</button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-      )}
+      {selectedCar && <CarDetailView car={selectedCar} onClose={() => setSelectedCar(null)} onSave={saveCarToGarage} onDelete={(id: string) => setItemToDelete({type: 'car', id})} onToggleFavorite={toggleFavorite} isOwner={true} />}
 
       {/* HEADER */}
       <header className="fixed top-0 left-0 w-full bg-gradient-to-b from-slate-950 to-transparent p-4 z-30 pointer-events-none flex justify-between items-start">
@@ -609,7 +660,7 @@ export default function PalmostreetApp() {
                         <div key={car.id} onClick={() => setSelectedCar(car)} className="perspective-card group cursor-pointer w-full">
                             <div className={`relative bg-slate-900 border-2 ${RARITY_CONFIG[car.rarity].border} rounded-xl overflow-hidden transform transition-transform duration-300 group-hover:scale-[1.02] shadow-2xl w-full`}>
                                 {car.isFavorite && <div className="absolute top-2 left-2 z-20"><Heart size={16} className="text-red-600 fill-red-600 drop-shadow-md" /></div>}
-                                <div className={`${gridColumns === 1 ? 'h-48' : 'h-32'} w-full bg-black relative overflow-hidden`}><div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(255,255,255,0.2),transparent)]"></div><img src={car.imageUrl} className="w-full h-full object-contain mix-blend-normal z-10 relative drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]" /><div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent z-0"></div></div>
+                                <div className={`${gridColumns === 1 ? 'h-48' : 'h-32'} w-full bg-black relative overflow-hidden`}><div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(255,255,255,0.2),transparent)]"></div><img src={car.imageUrl} className="w-full h-full object-cover mix-blend-normal z-10 relative drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]" /><div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black to-transparent z-0"></div></div>
                                 <div className="p-3 bg-slate-900 relative z-20">
                                     <div className="flex justify-between items-start mb-1">
                                         <div className="overflow-hidden"><h3 className={`font-orbitron font-bold text-white leading-none truncate ${gridColumns === 1 ? 'text-lg' : 'text-sm'}`}>{car.model}</h3><span className="text-[10px] uppercase text-zinc-500 tracking-wider truncate block">{car.brand}</span></div>
@@ -669,8 +720,8 @@ export default function PalmostreetApp() {
                             {friends.map((f, i) => (
                                 <div key={i} className="flex items-center justify-between p-3 bg-slate-900 rounded-lg border border-white/5 w-full">
                                     <div className="flex items-center space-x-3">
-                                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center"><User size={14} /></div>
-                                        <span className="text-sm font-bold">ID: {f.id.slice(0,6)}...</span>
+                                        <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center"><img src={f.avatar || DEFAULT_USER_AVATAR} className="w-full h-full rounded-full object-cover"/></div>
+                                        <span className="text-sm font-bold">{f.nickname || "Amico"}</span>
                                     </div>
                                     <div className="flex space-x-2">
                                         <button onClick={() => setViewingFriend(f.id)} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-full flex items-center"><Eye size={12} className="mr-1"/> GARAGE</button>
@@ -690,7 +741,20 @@ export default function PalmostreetApp() {
                 {/* Profile Header */}
                 <div className="bg-gradient-to-br from-slate-900 to-black p-6 rounded-3xl border border-white/10 text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent"></div>
-                    <div className="w-24 h-24 mx-auto rounded-full border-4 border-red-600 overflow-hidden mb-4 shadow-[0_0_20px_rgba(220,38,38,0.3)]"><img src={userData?.avatar} className="w-full h-full object-cover" /></div>
+                    {/* MODIFICA QUI: Aggiunto onClick per aprire il selettore file */}
+                    <div 
+                        className="w-24 h-24 mx-auto rounded-full border-4 border-red-600 overflow-hidden mb-4 shadow-[0_0_20px_rgba(220,38,38,0.3)] relative group cursor-pointer"
+                        onClick={() => profileImageInputRef.current?.click()}
+                    >
+                        <img src={userData?.avatar} className="w-full h-full object-cover" />
+                        {/* Overlay per indicare la modifica */}
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Edit2 size={24} className="text-white" />
+                        </div>
+                    </div>
+                    {/* Input file nascosto per il caricamento */}
+                    <input type="file" ref={profileImageInputRef} className="hidden" accept="image/*" onChange={handleProfilePictureUpload} />
+
                     <h2 className="text-2xl font-orbitron font-bold text-white">{userData?.nickname}</h2>
                     <p className="text-xs text-zinc-500 uppercase tracking-widest mb-6 flex justify-center items-center">ID: {user.uid.slice(0,8)} <Copy size={10} className="ml-1 cursor-pointer" onClick={() => navigator.clipboard.writeText(user.uid)}/></p>
                     <div className="bg-black/40 rounded-full h-4 w-full mb-2 overflow-hidden border border-white/10"><div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400" style={{ width: `${(levelInfo.currentLevelXp / levelInfo.nextLevelXp) * 100}%` }}></div></div>
@@ -717,3 +781,73 @@ export default function PalmostreetApp() {
     </div>
   );
 }
+
+// --- CAR DETAIL COMPONENT (REUSABLE) ---
+const CarDetailView = ({ car, onClose, onSave, onDelete, isOwner, onToggleFavorite }: any) => {
+    const [fullScreen, setFullScreen] = useState(false);
+
+    if (fullScreen) return <ImageViewerModal imageUrl={car.imageUrl} timestamp={car.timestamp} onClose={() => setFullScreen(false)} />;
+
+    return (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose}></div>
+            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[car.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[car.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto z-10`}>
+                <div className="relative h-64 w-full bg-black group" onClick={() => setFullScreen(true)}>
+                    <img src={car.imageUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
+                    <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors z-10"><X size={24} className="text-white" /></button>
+                    
+                    {isOwner && !car.isPreview && (
+                        <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(car); }} className={`absolute top-4 left-4 p-2 rounded-full transition-colors z-10 ${car.isFavorite ? 'bg-red-600 text-white' : 'bg-black/50 text-zinc-400 hover:text-white'}`}>
+                            <Heart size={24} fill={car.isFavorite ? "currentColor" : "none"} />
+                        </button>
+                    )}
+
+                    <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+                        <div>
+                            <span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-black/80 border ${RARITY_CONFIG[car.rarity].color} ${RARITY_CONFIG[car.rarity].border} mb-2 inline-block`}>{car.rarity}</span>
+                            <h2 className="text-3xl font-orbitron font-black text-white italic uppercase leading-none">{car.model}</h2>
+                            <p className="text-zinc-400 font-bold uppercase tracking-widest flex items-center">{car.brand} {car.nationality && <span className="ml-2 text-[10px] border border-white/20 px-1 rounded flex items-center"><Flag size={10} className="mr-1"/> {car.nationality}</span>}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    {car.isSimulation && (<div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg flex items-start space-x-3"><Key className="text-yellow-500 shrink-0 mt-1" size={18} /><div><h4 className="text-sm font-bold text-yellow-500">MODALITÀ SIMULAZIONE</h4><p className="text-xs text-zinc-400 mt-1">Vai in Impostazioni e inserisci API Key per dati reali.</p></div></div>)}
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Valore Mercato</span><span className="text-lg font-mono text-green-400">€{car.value?.toLocaleString()}</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Potenza</span><span className="text-lg font-mono text-red-400">{car.hp} HP</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Listino Originale</span><span className="text-sm font-mono text-zinc-300">€{car.list_price?.toLocaleString() || 'N/A'}</span></div>
+                        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Motore</span><span className="text-sm font-mono text-zinc-300 flex items-center"><Fuel size={12} className="mr-1"/> {car.engine || 'N/A'}</span></div>
+                    </div>
+
+                    {car.history && (
+                        <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
+                            <h4 className="text-xs font-bold text-blue-400 uppercase mb-2 flex items-center"><Activity size={14} className="mr-1"/> LO SAPEVI CHE?</h4>
+                            <p className="text-xs text-zinc-300 italic leading-relaxed">"{car.history}"</p>
+                        </div>
+                    )}
+
+                    <div className="space-y-3"><h3 className="font-orbitron text-sm text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-1">Performance Index</h3>{car.scores && Object.entries(car.scores).map(([key, score]) => (<div key={key} className="flex items-center justify-between"><span className="text-xs uppercase text-zinc-300 font-bold w-24">{(key as string).replace('_', ' ')}</span><div className="flex-1 h-2 bg-black rounded-full mx-3 overflow-hidden"><div className={`h-full ${(score as number) >= 4 ? 'bg-green-500' : (score as number) >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${((score as number)/5)*100}%`}}></div></div><span className="text-xs font-mono font-bold w-6 text-right">{score as number}/5</span></div>))}</div>
+                    
+                    {/* Actions based on ownership */}
+                    {isOwner ? (
+                        car.isPreview ? (
+                            <button onClick={onSave} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center space-x-2 active:scale-95 transition-transform"><span>VAI AL GARAGE</span><ChevronRight size={20} /></button>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600 flex items-center"><Calendar size={12} className="mr-1"/> {car.timestamp?.toDate().toLocaleDateString()}</span></div>
+                                <button onClick={() => onDelete(car.id)} className="w-full border border-red-900/50 bg-red-950/20 text-red-700 py-3 rounded-xl font-bold uppercase text-xs flex items-center justify-center hover:bg-red-900/40 hover:text-red-500 transition-colors"><Trash2 size={14} className="mr-2" /> ROTTAMA AUTOMOBILE</button>
+                            </div>
+                        )
+                    ) : (
+                        <div className="flex justify-center pt-4 border-t border-white/10">
+                             <span className="text-xs text-zinc-500 italic">Auto di proprietà di un amico</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};

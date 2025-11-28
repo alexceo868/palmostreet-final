@@ -6,11 +6,11 @@ import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, serverTim
 import { getStorage } from 'firebase/storage';
 
 // ==================================================================================
-// ⚠️  AREA CONFIGURAZIONE: INCOLLA LE TUE CHIAVI FIREBASE QUI SOTTO  ⚠️
+// CONFIGURAZIONE FIREBASE (Inserita dal tuo screenshot)
 // ==================================================================================
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAKndIXZMQ", // <--- CONTROLLA CHE SIA LA TUA CHIAVE REALE
+  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAKndIXZMQ", 
   authDomain: "palmostreet.firebaseapp.com",
   projectId: "palmostreet",
   storageBucket: "palmostreet.firebasestorage.app",
@@ -72,6 +72,7 @@ const AuthScreen = () => {
       if (err.code === 'auth/invalid-credential') setError("Email o password errati.");
       else if (err.code === 'auth/email-already-in-use') setError("Email già registrata.");
       else if (err.code === 'auth/weak-password') setError("Password troppo debole (min 6 caratteri).");
+      else if (err.code === 'auth/api-key-not-valid') setError("Errore API Key. Controlla le impostazioni su Firebase.");
       else setError(err.message);
       setLoading(false);
     }
@@ -233,7 +234,7 @@ export default function PalmostreetApp() {
              if(text) { const jsonMatch = text.match(/\{[\s\S]*\}/); aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : null; }
            } catch (err) { console.error("API Error", err); }
         }
-        if (!aiResult) { await new Promise(r => setTimeout(r, 2000)); aiResult = { brand: "Simulazione", model: "Auto Demo", year: 2024, hp: 200, value_eur: 30000, description: "Modalità simulazione. Inserisci API Key per dati reali.", scores: { speed: 3, versatility: 4, quality_price: 5, durability: 4 }, isSimulation: true }; }
+        if (!aiResult) { await new Promise(r => setTimeout(r, 2000)); aiResult = { brand: "Simulazione", model: "Auto Demo", year: 2024, hp: 200, value_eur: 30000, description: "Modalità simulazione attiva. Configura la API Key nelle Impostazioni per l'AI reale.", scores: { speed: 3, versatility: 4, quality_price: 5, durability: 4 }, isSimulation: true }; }
         const rarity = determineRarity(aiResult.year, aiResult.value_eur, aiResult.hp);
         const newCar = { ...aiResult, value: aiResult.value_eur, rarity: rarity, imageUrl: imageUrl, timestamp: serverTimestamp(), method: 'AI_VISION' };
         setSelectedCar({ ...newCar, isPreview: true });
@@ -355,5 +356,3 @@ export default function PalmostreetApp() {
     </div>
   );
 }
-
-

@@ -1,18 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload, Aperture } from 'lucide-react';
+import { Camera, Warehouse, Zap, Gauge, DollarSign, X, Shield, Award, Car, ScanLine, Maximize2, Minimize2, LogOut, Lock, Mail, ChevronRight, User, Users, ShoppingBag, CheckCircle, Target, TrendingUp, Activity, Star, Copy, Key, Settings, Image as ImageIcon, Upload, Aperture, AlertTriangle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, serverTimestamp, doc, setDoc, getDoc, updateDoc, where, getDocs, increment } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // ==================================================================================
-// ⚠️  AREA DI CONFIGURAZIONE  ⚠️
-// Incolla qui sotto il blocco 'const firebaseConfig' copiato da Firebase.
+// CONFIGURAZIONE FIREBASE (Già inserita dai tuoi screenshot)
 // ==================================================================================
 
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAkndIXZMQ",
+  apiKey: "AIzaSyBTjQYhYxwJ_CRtt4dbaCsc_JAKndIXZMQ", 
   authDomain: "palmostreet.firebaseapp.com",
   projectId: "palmostreet",
   storageBucket: "palmostreet.firebasestorage.app",
@@ -27,7 +25,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app); 
-const appId = 'palmostreet-v7-fixed';
+const appId = 'palmostreet-v8-final-fix';
 
 // --- UTILS & CONSTANTS ---
 const API_KEY_STORAGE_KEY = 'palmostreet_gemini_key';
@@ -41,21 +39,29 @@ const RARITY_CONFIG: any = {
   Common: { color: "text-white", border: "border-slate-500", bg: "bg-slate-900/80", shadow: "shadow-slate-500/20", gradient: "from-slate-800 via-black to-black" },
 };
 
-// --- IMAGE COMPRESSION UTILITY (FIX PER BUG CARICAMENTO INFINITO) ---
-const resizeImage = (file: File, maxWidth: number = 800): Promise<string> => {
+// --- IMAGE COMPRESSION UTILITY (FONDAMENTALE) ---
+// Riduce drasticamente le dimensioni per evitare errori Firestore (max 1MB)
+const resizeImage = (file: File, maxWidth: number = 600): Promise<string> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
-        const scaleFactor = maxWidth / img.width;
-        canvas.width = maxWidth;
-        canvas.height = img.height * scaleFactor;
-        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Compressione JPEG al 70% per ridurre drasticamente la dimensione
-        resolve(canvas.toDataURL('image/jpeg', 0.7)); 
+        ctx?.drawImage(img, 0, 0, width, height);
+        // Compressione JPEG al 60%
+        resolve(canvas.toDataURL('image/jpeg', 0.6)); 
       };
       img.src = e.target?.result as string;
     };
@@ -66,15 +72,15 @@ const resizeImage = (file: File, maxWidth: number = 800): Promise<string> => {
 // --- COMPONENTS ---
 
 const LoadingScanner = () => (
-  <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-50 backdrop-blur-md w-screen h-screen">
-    <div className="relative w-72 h-72 border-2 border-red-600 rounded-full overflow-hidden animate-spin-slow">
-       <div className="absolute inset-0 border-t-4 border-red-500 rounded-full"></div>
+  <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[100] backdrop-blur-md w-screen h-screen">
+    <div className="relative w-64 h-64 border-4 border-red-600 rounded-full overflow-hidden animate-spin-slow shadow-[0_0_50px_rgba(220,38,38,0.5)]">
+       <div className="absolute inset-0 border-t-4 border-white rounded-full"></div>
     </div>
-    <div className="absolute">
-        <Car className="w-24 h-24 text-red-600 animate-pulse" />
+    <div className="absolute flex flex-col items-center">
+        <Car className="w-20 h-20 text-white animate-pulse" />
     </div>
-    <div className="mt-8 font-orbitron text-red-500 text-xl animate-pulse tracking-widest text-center px-4">
-      ANALISI AI & COMPRESSIONE DATI...
+    <div className="mt-8 font-orbitron text-white text-lg animate-pulse tracking-widest text-center px-4">
+      ELABORAZIONE...
     </div>
   </div>
 );
@@ -108,9 +114,9 @@ const AuthScreen = () => {
   };
 
   return (
-    <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-hidden">
+    <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-y-auto">
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 w-full h-full pointer-events-none"></div>
-      <div className="w-full max-w-md space-y-8 relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
+      <div className="w-full max-w-md space-y-8 relative z-10">
         <div className="text-center space-y-2">
             <h1 className="text-5xl font-orbitron font-black text-white italic tracking-tighter drop-shadow-[0_0_15px_rgba(220,38,38,0.5)]">
                 PALMO<span className="text-red-600">STREET</span>
@@ -169,13 +175,13 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
   const handleAvatarUpload = async (e: any) => {
     const file = e.target.files[0];
     if (file) {
-      const resized = await resizeImage(file, 300); // Resize avatar to small
+      const resized = await resizeImage(file, 300);
       setAvatar(resized);
     }
   };
 
   return (
-    <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-hidden">
+    <div className="fixed inset-0 w-screen h-screen flex flex-col items-center justify-center bg-slate-950 p-6 font-exo overflow-y-auto">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20 w-full h-full pointer-events-none"></div>
         <div className="w-full max-w-sm bg-slate-900/80 backdrop-blur p-6 rounded-2xl border border-white/10 z-10 shadow-2xl animate-in fade-in zoom-in duration-500">
             <h2 className="text-3xl font-orbitron font-bold mb-2 text-center text-white italic">IDENTITÀ PILOTA</h2>
@@ -209,7 +215,7 @@ const ProfileWizard = ({ onComplete }: { onComplete: () => void }) => {
 const SettingsModal = ({ onClose, currentKey, onSaveKey }: any) => {
   const [key, setKey] = useState(currentKey);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in w-screen h-screen">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in w-screen h-screen">
       <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl w-full max-w-sm">
         <h3 className="font-orbitron text-xl font-bold text-white mb-4 flex items-center"><Settings className="mr-2" /> IMPOSTAZIONI</h3>
         <div className="mb-6"><label className="text-xs uppercase text-zinc-500 font-bold mb-2 block">Gemini API Key</label><input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Incolla qui la tua API Key..." className="w-full bg-black/50 border border-white/20 p-3 rounded-lg text-white text-sm focus:border-red-500 outline-none" /><p className="text-[10px] text-zinc-500 mt-2">Necessaria per il riconoscimento AI reale. <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-red-400 underline">Ottieni qui</a>.</p></div>
@@ -232,7 +238,7 @@ export default function PalmostreetApp() {
   const [friends, setFriends] = useState<any[]>([]); 
   const [objectives, setObjectives] = useState<any[]>([]); 
   
-  // Due riferimenti separati per i due input
+  // REF SEPARATI E FUNZIONANTI
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   
@@ -270,9 +276,8 @@ export default function PalmostreetApp() {
     setLoading(true);
     
     try {
-        // 1. RIDIMENSIONA IMMAGINE PRIMA DELL'INVIO (FIX BUG INFINITO)
-        const compressedBase64 = await resizeImage(file, 800);
-        // Rimuovi il prefisso data:image/jpeg;base64, per mandarlo all'AI
+        // COMPRESSIONE IMMAGINE (FIX SALVATAGGIO)
+        const compressedBase64 = await resizeImage(file, 600);
         const base64Data = compressedBase64.split(',')[1];
         
         let aiResult;
@@ -292,19 +297,23 @@ export default function PalmostreetApp() {
         
         const rarity = determineRarity(aiResult.year, aiResult.value_eur, aiResult.hp);
         
-        // Salviamo l'immagine compressa, non l'originale gigante!
+        // Salviamo l'immagine compressa per non bloccare Firebase
         const newCar = { ...aiResult, value: aiResult.value_eur, rarity: rarity, imageUrl: compressedBase64, timestamp: serverTimestamp(), method: 'AI_VISION' };
         setSelectedCar({ ...newCar, isPreview: true });
         
-    } catch (error) { 
+    } catch (error: any) { 
         console.error("Error:", error); 
+        alert("Errore durante l'analisi: " + error.message);
     } finally { 
         setLoading(false); 
     }
   };
 
   const saveCarToGarage = async () => {
-    if (!selectedCar || !user) return;
+    if (!selectedCar || !user) {
+        alert("Errore: Utente non loggato o dati auto mancanti.");
+        return;
+    }
     setLoading(true);
     try { 
         const { isPreview, ...carData } = selectedCar; 
@@ -312,7 +321,13 @@ export default function PalmostreetApp() {
         await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { xp: increment(100) }); 
         setSelectedCar(null); 
         setView('garage'); 
-    } catch (e) { console.error(e); } finally { setLoading(false); }
+        alert("Auto aggiunta al garage con successo!");
+    } catch (e: any) { 
+        console.error(e); 
+        alert("Errore salvataggio garage: " + e.message);
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   const addFriend = async (friendId: string) => { if (!friendId) return; const newFriend = { id: friendId, addedAt: new Date().toISOString() }; const updatedFriends = [...friends, newFriend]; await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid), { friends: updatedFriends }); };
@@ -337,16 +352,28 @@ export default function PalmostreetApp() {
 
       {/* CAR DETAIL MODAL */}
       {selectedCar && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 animate-in slide-in-from-bottom duration-300 w-full h-full">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !selectedCar.isPreview && setSelectedCar(null)}></div>
-            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[selectedCar.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[selectedCar.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto`}>
+            <div className={`relative w-full max-w-lg bg-gradient-to-b ${RARITY_CONFIG[selectedCar.rarity].gradient} rounded-t-3xl sm:rounded-3xl overflow-hidden border-t-2 sm:border-2 ${RARITY_CONFIG[selectedCar.rarity].border} shadow-2xl h-[90vh] sm:h-auto overflow-y-auto z-10`}>
                 <div className="relative h-64 w-full bg-black group"><img src={selectedCar.imageUrl} className="w-full h-full object-cover opacity-90 group-hover:scale-105 transition-transform duration-700" /><div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div><button onClick={() => setSelectedCar(null)} className="absolute top-4 right-4 p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors z-10"><X size={24} className="text-white" /></button><div className="absolute bottom-4 left-4 right-4 flex justify-between items-end"><div><span className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-black/80 border ${RARITY_CONFIG[selectedCar.rarity].color} ${RARITY_CONFIG[selectedCar.rarity].border} mb-2 inline-block`}>{selectedCar.rarity}</span><h2 className="text-3xl font-orbitron font-black text-white italic uppercase leading-none">{selectedCar.model}</h2><p className="text-zinc-400 font-bold uppercase tracking-widest">{selectedCar.brand}</p></div></div></div>
                 <div className="p-6 space-y-6">
                     {selectedCar.isSimulation && (<div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg flex items-start space-x-3"><Key className="text-yellow-500 shrink-0 mt-1" size={18} /><div><h4 className="text-sm font-bold text-yellow-500">MODALITÀ SIMULAZIONE</h4><p className="text-xs text-zinc-400 mt-1">Vai in Impostazioni e inserisci API Key per dati reali.</p></div></div>)}
                     <div className="grid grid-cols-2 gap-3"><div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Valore Mercato</span><span className="text-lg font-mono text-green-400">€{selectedCar.value?.toLocaleString()}</span></div><div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col justify-between"><span className="text-[10px] uppercase text-zinc-500 font-bold">Potenza</span><span className="text-lg font-mono text-red-400">{selectedCar.hp} HP</span></div></div>
                     <div className="space-y-3"><h3 className="font-orbitron text-sm text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-1">Performance Index</h3>{selectedCar.scores && Object.entries(selectedCar.scores).map(([key, score]) => (<div key={key} className="flex items-center justify-between"><span className="text-xs uppercase text-zinc-300 font-bold w-24">{(key as string).replace('_', ' ')}</span><div className="flex-1 h-2 bg-black rounded-full mx-3 overflow-hidden"><div className={`h-full ${(score as number) >= 4 ? 'bg-green-500' : (score as number) >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${((score as number)/5)*100}%`}}></div></div><span className="text-xs font-mono font-bold w-6 text-right">{score as number}/5</span></div>))}</div>
                     <div className="bg-black/30 p-4 rounded-xl border border-white/5"><p className="text-xs text-zinc-400 italic leading-relaxed">"{selectedCar.description}"</p></div>
-                    {selectedCar.isPreview ? (<button onClick={saveCarToGarage} className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse">AGGIUNGI AL GARAGE</button>) : (<div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600">ACQUISITA IL: {selectedCar.timestamp?.toDate().toLocaleDateString()}</span></div>)}
+                    
+                    {/* BUTTON AGGIUNGI AL GARAGE */}
+                    {selectedCar.isPreview ? (
+                        <button 
+                            onClick={saveCarToGarage} 
+                            className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest font-orbitron shadow-[0_0_20px_rgba(220,38,38,0.4)] animate-pulse flex items-center justify-center space-x-2"
+                        >
+                            <span>AGGIUNGI AL GARAGE</span>
+                            <ChevronRight size={20} />
+                        </button>
+                    ) : (
+                        <div className="flex justify-center"><span className="text-[10px] font-mono text-zinc-600">ACQUISITA IL: {selectedCar.timestamp?.toDate().toLocaleDateString()}</span></div>
+                    )}
                 </div>
             </div>
         </div>
@@ -386,33 +413,47 @@ export default function PalmostreetApp() {
         )}
 
         {view === 'scan' && (
-            <div className="h-full flex flex-col items-center justify-center animate-in zoom-in-95 w-full space-y-6">
+            <div className="flex flex-col items-center justify-center min-h-full w-full space-y-6 py-10">
                 
-                {/* BUTTON 1: CAMERA */}
-                <div onClick={() => cameraInputRef.current?.click()} className="w-full max-w-sm bg-red-600/10 border-2 border-red-600 rounded-2xl p-6 flex items-center space-x-4 cursor-pointer active:scale-95 transition-transform hover:bg-red-600/20">
-                    <div className="bg-red-600 p-3 rounded-full text-white"><Camera size={24} /></div>
-                    <div className="text-left">
-                        <h3 className="font-orbitron font-bold text-white text-lg">SCATTA FOTO</h3>
-                        <p className="text-xs text-zinc-400">Usa la fotocamera per analizzare</p>
+                {/* CAMERA BUTTON */}
+                <div onClick={() => cameraInputRef.current?.click()} className="w-full max-w-sm bg-red-600/10 border-2 border-red-600 rounded-2xl p-6 flex items-center space-x-4 cursor-pointer active:scale-95 transition-transform hover:bg-red-600/20 shadow-[0_0_20px_rgba(220,38,38,0.2)]">
+                    <div className="bg-red-600 p-4 rounded-full text-white shadow-lg"><Camera size={32} /></div>
+                    <div className="text-left flex-1">
+                        <h3 className="font-orbitron font-bold text-white text-xl">SCATTA FOTO</h3>
+                        <p className="text-xs text-zinc-400">Analizza un'auto dal vivo</p>
                     </div>
+                    <ChevronRight className="text-red-600" />
                 </div>
 
-                {/* BUTTON 2: GALLERY */}
+                {/* GALLERY BUTTON */}
                 <div onClick={() => galleryInputRef.current?.click()} className="w-full max-w-sm bg-slate-800/50 border-2 border-slate-700 rounded-2xl p-6 flex items-center space-x-4 cursor-pointer active:scale-95 transition-transform hover:bg-slate-700/50">
-                    <div className="bg-slate-700 p-3 rounded-full text-white"><ImageIcon size={24} /></div>
-                    <div className="text-left">
-                        <h3 className="font-orbitron font-bold text-white text-lg">GALLERIA</h3>
-                        <p className="text-xs text-zinc-400">Carica una foto salvata</p>
+                    <div className="bg-slate-700 p-4 rounded-full text-white shadow-lg"><ImageIcon size={32} /></div>
+                    <div className="text-left flex-1">
+                        <h3 className="font-orbitron font-bold text-white text-xl">GALLERIA</h3>
+                        <p className="text-xs text-zinc-400">Carica una foto esistente</p>
                     </div>
+                    <ChevronRight className="text-slate-500" />
                 </div>
 
-                {/* HIDDEN INPUTS */}
-                {/* capture="environment" force the rear camera on mobile */}
-                <input type="file" ref={cameraInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleScan} />
-                <input type="file" ref={galleryInputRef} className="hidden" accept="image/*" onChange={handleScan} />
+                {/* HIDDEN INPUTS (SEPARATI E CORRETTI) */}
+                <input 
+                    type="file" 
+                    ref={cameraInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    capture="environment" 
+                    onChange={handleScan} 
+                />
+                <input 
+                    type="file" 
+                    ref={galleryInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleScan} 
+                />
 
-                <p className="text-xs text-zinc-500 mt-4 text-center max-w-xs px-4">
-                    L'AI analizzerà la foto per determinare modello, valore e rarità del veicolo.
+                <p className="text-xs text-zinc-500 mt-4 text-center max-w-xs px-4 border-t border-white/5 pt-4">
+                    L'AI analizzerà la foto per determinare modello, valore e rarità.
                 </p>
             </div>
         )}
